@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Firma Digitale</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="login-card">
+        <h2>Firma Digitale con SHA-256</h2>
+        <form action="{{ url_for('index') }}" method="POST">
+            <div class="form-group">
+                <label for="text">Testo da firmare:</label>
+                <input type="text" id="text" name="text" required>
+            </div>
+            
+            <input type="submit" value="Calcola hash e firma" class="button">
+        </form>
+    </div>
+
+    <div class="results">
+        {% if hash_value %}
+        <div class="result-card">
+            <h3>Testo originale:</h3>
+            <textarea readonly>{{ original_text }}</textarea>
+            
+            <h3>Hash SHA-256:</h3>
+            <textarea readonly>{{ hash_value }}</textarea>
+            
+            <h3>Firma digitale:</h3>
+            <textarea readonly>{{ signature }}</textarea>
+
+            <h3>Dettagli della verifica:</h3>
+            <textarea readonly>{{ verification_details }}</textarea>
+            
+            <h3>Verifica della firma:</h3>
+            <div class="verification {% if verification_result %}success{% else %}failure{% endif %}">
+                {% if verification_result %}
+                    ✓ Verifica della firma riuscita
+                {% else %}
+                    ✗ Verifica della firma fallita
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
