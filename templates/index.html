@@ -4,45 +4,258 @@
     <meta charset="UTF-8">
     <title>Firma Digitale</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
-    <div class="login-card">
-        <h2>Firma Digitale con SHA-256</h2>
-        <form action="{{ url_for('index') }}" method="POST">
-            <div class="form-group">
-                <label for="text">Testo da firmare:</label>
-                <input type="text" id="text" name="text" required>
+    <div class="container">
+        <h1>Sistema di Firma Digitale</h1>
+        
+        <!-- Form di firma -->
+        <div class="card">
+            <h2>Firma un nuovo testo</h2>
+            <form id="sign-form">
+                <div class="form-group">
+                    <label for="text">Testo da firmare:</label>
+                    <input type="text" id="text" name="text" required>
+                </div>
+                
+                <button type="submit" class="button">Firma il testo</button>
+            </form>
+        </div>
+        
+        <!-- Risultato della firma -->
+        <div id="sign-result" class="card result-card" style="display: none;">
+            <h2>Risultato della firma</h2>
+            
+            <div class="result-item">
+                <h3>Testo originale:</h3>
+                <textarea id="result-text" readonly></textarea>
             </div>
             
-            <input type="submit" value="Calcola hash e firma" class="button">
-        </form>
-    </div>
-
-    <div class="results">
-        {% if hash_value %}
-        <div class="result-card">
-            <h3>Testo originale:</h3>
-            <textarea readonly>{{ original_text }}</textarea>
+            <div class="result-item">
+                <h3>Hash SHA-256:</h3>
+                <textarea id="result-hash" readonly></textarea>
+            </div>
             
-            <h3>Hash SHA-256:</h3>
-            <textarea readonly>{{ hash_value }}</textarea>
+            <div class="result-item">
+                <h3>Firma digitale:</h3>
+                <textarea id="result-signature" readonly></textarea>
+            </div>
             
-            <h3>Firma digitale:</h3>
-            <textarea readonly>{{ signature }}</textarea>
-
-            <h3>Dettagli della verifica:</h3>
-            <textarea readonly>{{ verification_details }}</textarea>
+            <form id="download-form">
+                <input type="hidden" id="download-signature" name="signature">
+                <input type="hidden" id="download-text" name="original_text">
+                <input type="hidden" id="download-hash" name="hash_value">
+                <button type="submit" class="button download-button">Scarica firma</button>
+            </form>
+        </div>
+        
+        <!-- Form di upload e verifica -->
+        <div class="card">
+            <h2>Verifica una firma esistente</h2>
+            <form id="verify-form" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="signature_file">Seleziona un file di firma (.txt):</label>
+                    <input type="file" id="signature_file" name="signature_file" accept=".txt" required>
+                </div>
+                
+                <button type="submit" class="button verify-button">Verifica firma</button>
+            </form>
+        </div>
+        
+        <!-- Risultato dell'upload -->
+        <div id="verify-result" class="card result-card" style="display: none;">
+            <h2>Risultato verifica del file</h2>
             
-            <h3>Verifica della firma:</h3>
-            <div class="verification {% if verification_result %}success{% else %}failure{% endif %}">
-                {% if verification_result %}
-                    ✓ Verifica della firma riuscita
-                {% else %}
-                    ✗ Verifica della firma fallita
-                {% endif %}
+            <div class="result-item">
+                <h3>Testo estratto dal file:</h3>
+                <textarea id="verify-text" readonly></textarea>
+            </div>
+            
+            <div class="result-item">
+                <h3>Hash calcolato:</h3>
+                <textarea id="verify-calculated-hash" readonly></textarea>
+            </div>
+            
+            <div class="result-item">
+                <h3>Hash salvato nel file:</h3>
+                <textarea id="verify-saved-hash" readonly></textarea>
+            </div>
+            
+            <div class="result-item">
+                <h3>Firma estratta dal file:</h3>
+                <textarea id="verify-signature" readonly></textarea>
+            </div>
+            
+            <div class="result-item">
+                <h3>Risultato della verifica:</h3>
+                <div id="verify-result-message" class="verification"></div>
+            </div>
+            
+            <!-- Sezione per l'ultimo hash generato -->
+            <div id="last-generated-hash-section" class="result-item" style="display: none;">
+                <h3>Ultimo hash generato:</h3>
+                <textarea id="last-generated-hash" readonly></textarea>
+                <div id="hash-match-result" class="verification"></div>
+            </div>
+            
+            <!-- Nel div verify-result, aggiungi questa sezione -->
+            <div id="last-generated-hash-section" class="result-item" style="display: none;">
+                <h3>Hash generato dalla precedente firma:</h3>
+                <textarea id="last-generated-hash" readonly></textarea>
+                
+                <div id="hash-match-result" class="verification"></div>
             </div>
         </div>
-        {% endif %}
+        
+        <!-- Stato delle chiavi -->
+        <div class="card key-status">
+            <h2>Stato delle chiavi</h2>
+            <ul>
+                <li>Chiave privata: {% if key_status.private_key_exists %}✅ Disponibile{% else %}❌ Non disponibile{% endif %}</li>
+                <li>Chiave pubblica: {% if key_status.public_key_exists %}✅ Disponibile{% else %}❌ Non disponibile{% endif %}</li>
+            </ul>
+        </div>
     </div>
+
+    <script>
+        $(document).ready(function() {
+            // Gestione della firma
+            $('#sign-form').submit(function(e) {
+                e.preventDefault();
+                
+                var formData = new FormData();
+                formData.append('text', $('#text').val());
+                
+                $.ajax({
+                    url: '/sign',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        if (response.success) {
+                            $('#result-text').val(response.original_text);
+                            $('#result-hash').val(response.hash_value);
+                            $('#result-signature').val(response.signature);
+                            
+                            // Aggiorna i campi nascosti per il download
+                            $('#download-signature').val(response.signature);
+                            $('#download-text').val(response.original_text);
+                            $('#download-hash').val(response.hash_value);
+                            
+                            $('#sign-result').show();
+                        } else {
+                            alert('Errore: ' + response.error);
+                        }
+                    },
+                    error: function() {
+                        alert('Si è verificato un errore di connessione');
+                    }
+                });
+            });
+            
+            // Gestione del download
+            $('#download-form').submit(function(e) {
+                e.preventDefault();
+                
+                var form = $(this);
+                var url = '/download_signature';
+                
+                // Creiamo un form nascosto per il download
+                var hiddenForm = $('<form>', {
+                    'action': url,
+                    'method': 'post',
+                    'target': '_blank'
+                }).appendTo('body');
+                
+                $('<input>').attr({
+                    type: 'hidden',
+                    name: 'signature',
+                    value: $('#download-signature').val()
+                }).appendTo(hiddenForm);
+                
+                $('<input>').attr({
+                    type: 'hidden',
+                    name: 'original_text',
+                    value: $('#download-text').val()
+                }).appendTo(hiddenForm);
+                
+                $('<input>').attr({
+                    type: 'hidden',
+                    name: 'hash_value',
+                    value: $('#download-hash').val()
+                }).appendTo(hiddenForm);
+                
+                hiddenForm.submit();
+                hiddenForm.remove();
+            });
+            
+            // Gestione della verifica
+            $('#verify-form').submit(function(e) {
+                e.preventDefault();
+                
+                var formData = new FormData();
+                var fileInput = $('#signature_file')[0];
+                
+                if (fileInput.files.length > 0) {
+                    formData.append('signature_file', fileInput.files[0]);
+                    
+                    $.ajax({
+                        url: '/verify',
+                        type: 'POST',
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                        success: function(response) {
+                            if (response.success) {
+                                $('#verify-text').val(response.original_text);
+                                $('#verify-calculated-hash').val(response.upload_hash);
+                                $('#verify-saved-hash').val(response.saved_hash);
+                                $('#verify-signature').val(response.upload_signature);
+                                
+                                // Aggiungi info sull'ultimo hash generato
+                                if (response.last_generated_hash) {
+                                    $('#last-generated-hash-section').show();
+                                    $('#last-generated-hash').val(response.last_generated_hash);
+                                    
+                                    if (response.hash_match_last_generated) {
+                                        $('#hash-match-result').text("✅ L'hash corrisponde a quello appena generato");
+                                        $('#hash-match-result').removeClass('failure').addClass('success');
+                                    } else {
+                                        $('#hash-match-result').text("❌ L'hash NON corrisponde a quello appena generato");
+                                        $('#hash-match-result').removeClass('success').addClass('failure');
+                                    }
+                                } else {
+                                    $('#last-generated-hash-section').hide();
+                                }
+                                
+                                // Aggiorna il messaggio di risultato
+                                var resultDiv = $('#verify-result-message');
+                                resultDiv.text(response.result_message);
+                                
+                                // Aggiorna la classe CSS in base al risultato
+                                if (response.verification_result) {
+                                    resultDiv.removeClass('failure').addClass('success');
+                                } else {
+                                    resultDiv.removeClass('success').addClass('failure');
+                                }
+                                
+                                $('#verify-result').show();
+                            } else {
+                                alert('Errore: ' + response.error);
+                            }
+                        },
+                        error: function() {
+                            alert('Si è verificato un errore di connessione');
+                        }
+                    });
+                } else {
+                    alert('Seleziona un file da caricare');
+                }
+            });
+        });
+    </script>
 </body>
 </html>
+
